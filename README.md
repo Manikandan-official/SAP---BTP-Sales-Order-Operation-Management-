@@ -129,6 +129,8 @@ Frontend built with:
 
 ## 📂 Project Structure
 
+```text
+
 sales-order-operation/
 │
 ├── app/ → Approuter / UI5 modules (if any)
@@ -149,6 +151,7 @@ sales-order-operation/
 ├── mta.yaml → Multi-target application descriptor
 ├── package.json → CAP backend dependencies
 └── README.md → Project documentation
+```
 
 ## 🛠️ Running Locally
 
