@@ -1,0 +1,5 @@
+ID;parentSO_ID;skuName;skuCode;unitRate;qty;materialOrdered;bomOrderRef;bomExpectedDate;materialReceived;receivedDate;qaApproved;fgReady;invoiceCreated
+I1;M1;Phone A;PA1;10000;2;false;;;false;;false;false;false
+I2;M1;Phone B;PB1;12000;1;false;;;false;;false;false;false
+I3;M2;Phone C;PC1;15000;3;false;;;false;;false;false;false
+I4;M2;Phone D;PD1;18000;1;false;;;false;;false;false;false
