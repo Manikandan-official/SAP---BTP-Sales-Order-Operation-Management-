@@ -1,23 +1,71 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# production
-/build
-
-# misc
-.DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
+###############################
+# Node / NPM / Yarn Artifacts
+###############################
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+###############################
+# CAP Artifacts
+###############################
+gen/
+.db/
+default-env.json
+*.hdbtable
+*.hdbview
+*.hdbsynonym
+*.cdsdeploy.json
+
+###############################
+# UI Frontend (React)
+###############################
+ui-frontend/node_modules/
+ui-frontend/build/
+ui-frontend/dist/
+ui-frontend/.env.local
+ui-frontend/.env.development.local
+ui-frontend/.env.test.local
+ui-frontend/.env.production.local
+
+# Ignore Tailwind CLI binary / tools
+ui-frontend/tools/
+
+###############################
+# BAS / VSCode workspace files
+###############################
+.vscode/
+.history/
+*.code-workspace
+
+###############################
+# OS / IDE Files
+###############################
+.DS_Store
+Thumbs.db
+*.log
+
+###############################
+# Git / Commit Protection
+###############################
+# Don’t track local environment files
+.env
+.envrc
+.env*
+
+# Prevent re-adding old submodule remnants
+.gitmodules
+.ui-frontend/.git
+
+###############################
+# MTA Build Artifacts
+###############################
+mta_archives/
+.sales-order-operation_mta_build_tmp/
+
+###############################
+# Misc
+###############################
+tmp/
+temp/
+logs/
