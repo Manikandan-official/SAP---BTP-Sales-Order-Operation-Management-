@@ -1,16 +1,36 @@
+// src/components/SortableCardWrapper.jsx
 import React from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import SOCard from "./SOCard";
 
-export default function SortableCardWrapper({ id, data }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id });
+export default function SortableCardWrapper({
+  id,
+  data,
+  fromStage,
+  onOpenDetail
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({
+    id,
+    data: {
+      ...data,
+      type: "CARD",        // 🔒 REQUIRED
+      orderId: id,         // 🔒 REQUIRED
+      fromStage            // 🔒 REQUIRED
+    }
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.6 : 1,
+    opacity: isDragging ? 0.6 : 1
   };
 
   return (
@@ -20,7 +40,11 @@ export default function SortableCardWrapper({ id, data }) {
       {...attributes}
       {...listeners}
     >
-      <SOCard item={data} dragging={isDragging} />
+      <SOCard
+        item={data}
+        dragging={isDragging}
+        onOpen={() => onOpenDetail?.(data)}
+      />
     </div>
   );
 }

@@ -1,11 +1,23 @@
-import { apiGet, apiPost } from "./client";
+import api from "./client";
 
-// Load Sales Orders + customer + stages
-export async function getOrders() {
-  return apiGet("/SalesOrders?$expand=customer,stages");
+export async function fetchOrders() {
+  const res = await api.get("/SalesOrders?$expand=items");
+  return res.value || res; 
 }
 
-// Move stage using CAP action
-export async function moveOrderStage(orderID, stage) {
-  return apiPost("/moveToStage", { orderID, stage });
+export async function fetchCustomers() {
+  const res = await api.get("/Customers");
+  return res.value || res;
+}
+
+export async function moveToStage(orderID, stage) {
+  return api.post("/moveToStage", { orderID, stage });
+}
+
+export async function createChildSO(payload) {
+  return api.post("/createChildSO", payload);
+}
+
+export async function createMasterSO(payload) {
+  return api.post("/uploadMasterSO", payload);
 }
