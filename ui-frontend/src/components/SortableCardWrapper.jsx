@@ -1,19 +1,20 @@
-// src/components/SortableCardWrapper.jsx
 import React from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { MoreVertical } from "react-feather";
 import SOCard from "./SOCard";
 
 export default function SortableCardWrapper({
   id,
   data,
   fromStage,
-  onOpenDetail
+  onOpenDetail,
+  onStageAction
 }) {
   const {
+    setNodeRef,
     attributes,
     listeners,
-    setNodeRef,
     transform,
     transition,
     isDragging
@@ -21,29 +22,37 @@ export default function SortableCardWrapper({
     id,
     data: {
       ...data,
-      type: "CARD",        // 🔒 REQUIRED
-      orderId: id,         // 🔒 REQUIRED
-      fromStage            // 🔒 REQUIRED
+      type: "CARD",
+      orderId: id,
+      fromStage
     }
   });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.6 : 1
-  };
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : 1
+      }}
+      className="relative"
     >
+      {/* DRAG HANDLE ONLY */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="absolute top-2 right-2 cursor-grab text-gray-400 hover:text-gray-700 z-10"
+      >
+        <MoreVertical size={16} />
+      </div>
+
+      {/* CARD BODY — NO DND LISTENERS */}
       <SOCard
         item={data}
         dragging={isDragging}
         onOpen={() => onOpenDetail?.(data)}
+        onStageAction={onStageAction}
       />
     </div>
   );

@@ -69,3 +69,6 @@ mta_archives/
 tmp/
 temp/
 logs/
+.env
+../db.sqlite-*
+../app/ui/

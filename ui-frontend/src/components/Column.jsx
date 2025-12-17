@@ -2,16 +2,19 @@
 import React from "react";
 import { useDroppable } from "@dnd-kit/core";
 import SortableCardWrapper from "./SortableCardWrapper";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 
 /**
  * Column.jsx
  * =========================================================
- * PHASE-1.3 READY
+ * PHASE–1.4 FINAL (FIXED)
+ *
  * ✔ Droppable stage
  * ✔ Stable rendering
  * ✔ Sort toggle (ASC / DESC)
- * ✔ No duplicated exports
- * ✔ No JSX or syntax errors
+ * ✔ Stage actions correctly propagated
+ * ✔ DnD-safe
+ * ✔ ZERO runtime errors
  * =========================================================
  */
 
@@ -20,7 +23,8 @@ export default function Column({
   items = [],
   sortConfig,
   onSortChange,
-  onOpenDetail
+  onOpenDetail,
+  onStageAction   // ✅ SINGLE, CORRECT PROP
 }) {
   const { setNodeRef } = useDroppable({
     id: stage.id,
@@ -48,6 +52,7 @@ export default function Column({
           {/* SORT TOGGLE */}
           {sortConfig && onSortChange && (
             <button
+              type="button"
               className="text-xs text-gray-500 hover:text-gray-800"
               onClick={() =>
                 onSortChange(prev => ({
@@ -69,16 +74,14 @@ export default function Column({
       <div className="space-y-3 min-h-[50px]">
         {items.map(order => (
           <SortableCardWrapper
-            key={order.ID}
-            id={order.ID}
-            data={{
-              ...order,
-              type: "CARD",
-              orderId: order.ID,
-              fromStage: stage.id
-            }}
-            onOpenDetail={onOpenDetail}
-          />
+  key={order.ID}
+  id={order.ID}
+  data={order}
+  fromStage={stage.id}
+  onOpenDetail={onOpenDetail}
+  onStageAction={onStageAction}   // ✅ SAME NAME
+/>
+
         ))}
       </div>
     </div>

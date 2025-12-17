@@ -1,3 +1,4 @@
+// src/components/Board.jsx
 import React, { useState } from "react";
 import {
   DndContext,
@@ -13,13 +14,13 @@ import SOCard from "./SOCard";
 /**
  * Board.jsx
  * =========================================================
- * PHASE–1.4 (UI-ONLY, STABLE)
+ * PHASE–1.4 FINAL (AUTHORITATIVE)
  *
- * ✔ Deterministic drag & drop
- * ✔ Stable per-column sorting
- * ✔ Stage-specific actions wired
- * ✔ CARD → STAGE validation
- * ✔ No backend calls
+ * ✔ Multi-card-per-stage drag & drop FIXED
+ * ✔ Drop works on empty AND populated stages
+ * ✔ Stable sorting preserved
+ * ✔ Stage actions wired (UI-only)
+ * ✔ Backend-ready, zero coupling
  * =========================================================
  */
 
@@ -41,7 +42,7 @@ export default function Board({
 
   const [activeCard, setActiveCard] = useState(null);
 
-  /* ================= STABLE SORT HELPERS ================= */
+  /* ================= SORT HELPERS ================= */
   const stableSort = (arr, compareFn) =>
     arr
       .map((v, i) => ({ v, i }))
@@ -56,11 +57,10 @@ export default function Board({
 
   /* ================= DRAG START ================= */
   const handleDragStart = (event) => {
-    const { active } = event;
-    setActiveCard(active?.data?.current || null);
+    setActiveCard(event.active?.data?.current || null);
   };
 
-  /* ================= DRAG END ================= */
+  /* ================= DRAG END (CRITICAL FIX) ================= */
   const handleDragEnd = (event) => {
     const { active, over } = event;
     setActiveCard(null);
@@ -70,19 +70,28 @@ export default function Board({
     const activeData = active.data?.current;
     const overData = over.data?.current;
 
+    // Guardrails
     if (!activeData || activeData.type !== "CARD") return;
-    if (!overData || overData.type !== "STAGE") return;
 
     const orderID = activeData.orderId;
     const fromStage = activeData.fromStage;
-    const toStage = overData.stage;
+
+    let toStage = null;
+
+    // ✅ Drop on empty column
+    if (overData?.type === "STAGE") {
+      toStage = overData.stage;
+    }
+
+    // ✅ Drop on card inside column (THIS WAS MISSING)
+    if (overData?.type === "CARD") {
+      toStage = overData.fromStage;
+    }
 
     if (!orderID || !toStage) return;
     if (fromStage === toStage) return;
 
-    if (typeof onMove === "function") {
-      onMove(orderID, toStage);
-    }
+    onMove?.(orderID, toStage);
   };
 
   /* ================= RENDER ================= */
@@ -97,7 +106,10 @@ export default function Board({
       <div className="flex gap-6 overflow-x-auto pb-4">
         {stages.map(stage => {
           const sortConfig =
-            sortByStage[stage.id] || { field: "expectedShipDate", dir: "asc" };
+            sortByStage[stage.id] || {
+              field: "expectedShipDate",
+              dir: "asc"
+            };
 
           const sortedItems = stableSort(
             ordersByStage[stage.id] || [],
@@ -112,6 +124,7 @@ export default function Board({
               sortConfig={sortConfig}
               onSortChange={onSortChange}
               onOpenDetail={onOpenDetail}
+              onStageAction={onStageAction}
             />
           );
         })}
@@ -119,15 +132,7 @@ export default function Board({
 
       {/* DRAG OVERLAY */}
       <DragOverlay>
-        {activeCard ? (
-          <div style={{ width: 300 }}>
-            <SOCard
-              item={activeCard}
-              dragging
-              onStageAction={onStageAction}
-            />
-          </div>
-        ) : null}
+        {activeCard ? <SOCard item={activeCard} dragging /> : null}
       </DragOverlay>
     </DndContext>
   );

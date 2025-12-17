@@ -1,23 +1,50 @@
-import api from "./client";
+// src/api/sales.js
+import { apiGet, apiPost } from "./client";
+
+/* =========================================================
+   STAGE ACTIONS (CAP ACTIONS)
+   UI calls these → backend enforces rules
+========================================================= */
+
+export const markRMOrdered = (orderID) =>
+  apiPost("/odata/v4/sales/markRMOrdered", { orderID });
+
+export const markRMReceived = (orderID) =>
+  apiPost("/odata/v4/sales/markRMReceived", { orderID });
+
+export const approveQA = (orderID) =>
+  apiPost("/odata/v4/sales/approveQA", { orderID });
+
+export const createInvoice = (orderID) =>
+  apiPost("/odata/v4/sales/createInvoice", { orderID });
+
+export const moveToStage = (orderID, stage) =>
+  apiPost("/odata/v4/sales/moveToStage", { orderID, stage });
+
+/* =========================================================
+   READ APIs (OData v4)
+========================================================= */
 
 export async function fetchOrders() {
-  const res = await api.get("/SalesOrders?$expand=items");
-  return res.value || res; 
+  const res = await apiGet(
+    "/odata/v4/sales/SalesOrders?$expand=items"
+  );
+  return res?.value ?? [];
 }
 
 export async function fetchCustomers() {
-  const res = await api.get("/Customers");
-  return res.value || res;
+  const res = await apiGet(
+    "/odata/v4/sales/Customers"
+  );
+  return res?.value ?? [];
 }
 
-export async function moveToStage(orderID, stage) {
-  return api.post("/moveToStage", { orderID, stage });
-}
+/* =========================================================
+   CREATE APIs
+========================================================= */
 
-export async function createChildSO(payload) {
-  return api.post("/createChildSO", payload);
-}
+export const createChildSO = (payload) =>
+  apiPost("/odata/v4/sales/createChildSO", payload);
 
-export async function createMasterSO(payload) {
-  return api.post("/uploadMasterSO", payload);
-}
+export const createMasterSO = (payload) =>
+  apiPost("/odata/v4/sales/uploadMasterSO", payload);

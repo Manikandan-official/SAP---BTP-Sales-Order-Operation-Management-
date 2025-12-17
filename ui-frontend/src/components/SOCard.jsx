@@ -212,18 +212,15 @@ export default function SOCard({
           </div>
 
           <button
-            type="button"
-            disabled={item.invoiced}
-            className="w-full px-2 py-1 text-xs rounded bg-purple-600 text-white
-              disabled:opacity-40 hover:bg-purple-700"
-            onClick={(e) => {
-              e.stopPropagation();
-              fire(onStageAction?.createInvoice);
-            }}
-          >
-            <FileText size={12} className="inline mr-1" />
-            Create Invoice
-          </button>
+  type="button"
+  onClick={(e) => {
+    e.stopPropagation();       // 🔑 REQUIRED
+    onStageAction.markRMOrdered(item.ID);
+  }}
+>
+  Mark RM Ordered
+</button>
+
         </div>
       )}
 

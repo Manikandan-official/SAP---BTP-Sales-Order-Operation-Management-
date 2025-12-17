@@ -1,8 +1,13 @@
+// src/App.jsx
 import { useMemo, useState } from "react";
 import Topbar from "./components/Topbar";
 import Sidebar from "./components/Sidebar";
 import Board from "./components/Board";
 import AddSOModal from "./components/AddSOModal";
+
+/* =========================================================
+   CONSTANTS
+========================================================= */
 
 const STAGES = [
   { id: "SalesSupport", title: "Sales Order" },
@@ -21,72 +26,112 @@ const INITIAL_ORDERS = [
     customer_ID: "C1",
     currentStage: "SalesSupport",
     items: [
-      { skuName: "Screen", unitRate: 100, qty: 10 },
-      { skuName: "Battery", unitRate: 50, qty: 10 }
+      { skuName: "Screen", qty: 10 },
+      { skuName: "Battery", qty: 10 }
     ]
   }
 ];
+
+/* =========================================================
+   APP
+========================================================= */
 
 export default function App() {
   const [allOrders, setAllOrders] = useState(INITIAL_ORDERS);
   const [openAdd, setOpenAdd] = useState(false);
   const [selectedMaster, setSelectedMaster] = useState(null);
-  const [lastCreatedChild, setLastCreatedChild] = useState(null);
 
-  /* ================= SORT STATE ================= */
-  const [sortByStage, setSortByStage] = useState({
-    SalesSupport: { field: "expectedShipDate", dir: "asc" },
-    Procurement: { field: "expectedShipDate", dir: "asc" },
-    RMInventory: { field: "expectedShipDate", dir: "asc" },
-    Quality: { field: "lastActivity", dir: "asc" },
-    FGInventory: { field: "lastActivity", dir: "asc" }
-  });
+  /* =========================================================
+     CORE HELPERS (SINGLE SOURCE OF TRUTH)
+  ========================================================= */
 
-  /* ================= STAGE MOVE ================= */
-  const handleMove = (orderID, toStage) => {
-    setAllOrders(prev =>
-      prev.map(o =>
-        o.ID === orderID
-          ? { ...o, currentStage: toStage, lastActivity: new Date().toISOString() }
-          : o
-      )
-    );
-  };
-
-  /* ================= STAGE ACTIONS ================= */
   const updateOrder = (orderID, updater) => {
     setAllOrders(prev =>
       prev.map(o => (o.ID === orderID ? updater(o) : o))
     );
   };
 
-  const markRMOrdered = (orderID) =>
-    updateOrder(orderID, o => ({
-      ...o,
-      items: o.items.map(i => ({ ...i, materialOrdered: true }))
-    }));
+  const updateAllItems = (order, updater) => ({
+    ...order,
+    items: Array.isArray(order.items)
+      ? order.items.map(updater)
+      : []
+  });
 
-  const markRMReceived = (orderID) =>
-    updateOrder(orderID, o => ({
-      ...o,
-      items: o.items.map(i => ({ ...i, materialReceived: true }))
-    }));
+  const nextStage = (stage) => {
+    switch (stage) {
+      case "SalesSupport":
+        return "Procurement";
+      case "Procurement":
+        return "RMInventory";
+      case "RMInventory":
+        return "Quality";
+      case "Quality":
+        return "FGInventory";
+      default:
+        return stage;
+    }
+  };
 
-  const approveQA = (orderID) =>
-    updateOrder(orderID, o => ({
-      ...o,
-      items: o.items.map(i => ({ ...i, qaApproved: true }))
-    }));
+  /* =========================================================
+     STAGE ACTIONS (PHASE 2.1 — UI AUTHORITATIVE)
+     👉 Buttons call these
+     👉 State updates immediately
+     👉 Easy swap with CAP later
+  ========================================================= */
 
-  const createInvoice = (orderID) =>
-    updateOrder(orderID, o => ({
-      ...o,
-      invoiced: true
-    }));
+  const stageActions = {
+    markRMOrdered: (orderID) =>
+      updateOrder(orderID, order => ({
+        ...updateAllItems(order, i => ({
+          ...i,
+          materialOrdered: true
+        })),
+        currentStage: nextStage(order.currentStage)
+      })),
 
-  /* ================= ADD CHILD SO ================= */
+    markRMReceived: (orderID) =>
+      updateOrder(orderID, order => ({
+        ...updateAllItems(order, i => ({
+          ...i,
+          materialReceived: true
+        })),
+        currentStage: nextStage(order.currentStage)
+      })),
+
+    approveQA: (orderID) =>
+      updateOrder(orderID, order => ({
+        ...updateAllItems(order, i => ({
+          ...i,
+          qaApproved: true
+        })),
+        currentStage: nextStage(order.currentStage)
+      })),
+
+    createInvoice: (orderID) =>
+      updateOrder(orderID, order => ({
+        ...order,
+        invoiced: true
+      }))
+  };
+
+  /* =========================================================
+     DRAG & DROP MOVE (UI ONLY)
+  ========================================================= */
+
+  const handleMove = (orderID, toStage) => {
+    updateOrder(orderID, order => ({
+      ...order,
+      currentStage: toStage
+    }));
+  };
+
+  /* =========================================================
+     ADD CHILD SO
+  ========================================================= */
+
   const handleCreateChildSO = (payload) => {
-    const newChild = {
+    const child = {
       ID: crypto.randomUUID(),
       parentSO_ID: payload.parentSO_ID,
       customer_ID: payload.customer_ID,
@@ -94,16 +139,23 @@ export default function App() {
       currentStage: "SalesSupport",
       expectedShipDate: payload.expectedShipDate,
       plant: payload.plant,
-      lastActivity: new Date().toISOString(),
-      items: payload.items
+      items: payload.items.map(i => ({
+        ...i,
+        materialOrdered: false,
+        materialReceived: false,
+        qaApproved: false,
+        fgReady: false
+      }))
     };
 
-    setAllOrders(prev => [...prev, newChild]);
-    setLastCreatedChild(newChild);
+    setAllOrders(prev => [...prev, child]);
     setOpenAdd(false);
   };
 
-  /* ================= BOARD GROUPING ================= */
+  /* =========================================================
+     BOARD GROUPING
+  ========================================================= */
+
   const ordersByStage = useMemo(() => {
     const buckets = {
       SalesSupport: [],
@@ -114,7 +166,7 @@ export default function App() {
     };
 
     allOrders.forEach(o => {
-      if (!o.parentSO_ID) return;
+      if (!o.parentSO_ID) return; // master SOs not on board
       buckets[o.currentStage || "SalesSupport"].push(o);
     });
 
@@ -123,35 +175,33 @@ export default function App() {
 
   const masters = allOrders.filter(o => !o.parentSO_ID);
 
+  /* =========================================================
+     RENDER
+  ========================================================= */
+
   return (
-    <div>
+    <div className="h-screen flex flex-col">
       <Topbar onAdd={() => setOpenAdd(true)} />
 
-      <div style={{ display: "flex" }}>
+      <div className="flex flex-1 overflow-hidden">
         <Sidebar
           customers={mockCustomers}
           orders={allOrders}
           selectedCustomer={null}
           selectedMaster={selectedMaster}
-          lastCreatedChild={lastCreatedChild}
           onCustomerSelect={() => {}}
           onMasterSelect={setSelectedMaster}
         />
 
-        <main style={{ padding: 16 }}>
+        <main className="flex-1 p-6 overflow-auto">
           <Board
-            stages={STAGES}
-            ordersByStage={ordersByStage}
-            sortByStage={sortByStage}
-            onSortChange={setSortByStage}
-            onMove={handleMove}
-            onStageAction={{
-              markRMOrdered,
-              markRMReceived,
-              approveQA,
-              createInvoice
-            }}
-          />
+  stages={STAGES}
+  ordersByStage={ordersByStage}
+  onMove={handleMove}
+  onOpenDetail={() => {}}
+  onStageAction={stageActions}   // ✅ SINGULAR
+/>
+
         </main>
       </div>
 
