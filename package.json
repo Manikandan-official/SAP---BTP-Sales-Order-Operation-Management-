@@ -14,17 +14,23 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.17"
   },
+  "devDependencies": {
+    "@sap/cds": "^9.5.1",
+    "@sap/cds-dk": "^9",
+    "@cap-js/hana": "^2"
+  },
   "cds": {
-    "requires": {
-      "db": {
-        "kind": "sqlite",
-        "model": "db/schema"
+  "requires": {
+    "db": {
+      "kind": "hana",
+      "pool": {
+        "min": 1,
+        "max": 5,
+        "idleTimeoutMillis": 300000,
+        "acquireTimeoutMillis": 300000
       }
     }
-  },
-  "devDependencies": {
-    "@cap-js/sqlite": "^2.1.0",
-    "@sap/cds": "^9.5.1",
-    "@sap/cds-dk": "^9"
   }
+}
+
 }

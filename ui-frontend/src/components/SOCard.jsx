@@ -1,22 +1,22 @@
+// src/components/SOCard.jsx
 import React from "react";
+import { useDraggable } from "@dnd-kit/core";
 import {
   Calendar,
-  CheckCircle,
   Clock,
   Package,
+  CheckCircle,
   FileText
 } from "react-feather";
 
 /**
- * SOCard.jsx (PHASE-1.4 LOCKED FINAL)
+ * SOCard.jsx — PHASE 1 FINAL
  * =========================================================
- * ✔ Stage actions ALWAYS visible
- * ✔ Buttons disable instead of disappearing
+ * ✔ Stage-driven workflow (NO item dependency)
  * ✔ DnD-safe
- * ✔ Sorting-safe
- * ✔ UI-only state transitions
- * ✔ Zero undefined crashes
- * ✔ Backend-ready
+ * ✔ Backend-agnostic
+ * ✔ Deterministic UI behavior
+ * ✔ Phase-1 compliant (Phase-2 will add SKU rules)
  * =========================================================
  */
 
@@ -24,12 +24,26 @@ export default function SOCard({
   item,
   dragging = false,
   onOpen,
-  onStageAction
+  onStageAction = {}
 }) {
   if (!item || typeof item !== "object") return null;
 
   const stage = item.currentStage || "SalesSupport";
-  const items = Array.isArray(item.items) ? item.items : [];
+
+  /* ================= DRAGGABLE ================= */
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: item.ID,
+      data: {
+        type: "CARD",
+        orderId: item.ID,
+        fromStage: stage
+      }
+    });
+
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+    : undefined;
 
   /* ================= RAG LOGIC ================= */
   let rag = "green";
@@ -47,35 +61,34 @@ export default function SOCard({
       ? "bg-yellow-500"
       : "bg-green-500";
 
-  /* ================= STAGE FLAGS ================= */
-  const allRMOrdered =
-    items.length > 0 && items.every(i => i.materialOrdered);
+  /* ================= PHASE-1 WORKFLOW FLAGS ================= */
+  const canOrderRM = stage === "Procurement";
+  const canReceiveRM = stage === "RMInventory";
+  const canApproveQA = stage === "Quality";
+  const canInvoice = stage === "FGInventory";
 
-  const allRMReceived =
-    items.length > 0 && items.every(i => i.materialReceived);
-
-  const allQAApproved =
-    items.length > 0 && items.every(i => i.qaApproved);
-
-  const allFGReady =
-    items.length > 0 && items.every(i => i.fgReady);
-
-  /* ================= SAFE ACTION ================= */
-  const fire = (fn) => {
-    if (typeof fn === "function") {
-      fn(item.ID);
-    }
+  const fire = fn => {
+    if (typeof fn === "function") fn(item.ID);
   };
 
   const renderDate = d =>
     d ? new Date(d).toLocaleDateString() : "--";
 
+  /* ================= RENDER ================= */
   return (
     <article
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      style={style}
       onClick={() => onOpen?.(item)}
-      className={`relative bg-white rounded-md p-3 border shadow-sm transition cursor-pointer
-        ${dragging ? "ring-2 ring-blue-400 opacity-80" : "hover:shadow-md"}`}
-      style={{ width: 260 }}
+      className={`relative bg-white rounded-md p-3 border shadow-sm cursor-pointer select-none
+        transition
+        ${
+          dragging || isDragging
+            ? "ring-2 ring-blue-400 opacity-80"
+            : "hover:shadow-md"
+        }`}
     >
       {/* RAG STRIP */}
       <div className={`absolute left-0 top-0 h-full w-1 ${ragColor}`} />
@@ -109,28 +122,17 @@ export default function SOCard({
       {/* ================= PROCUREMENT ================= */}
       {stage === "Procurement" && (
         <div className="mt-3 space-y-2 text-xs">
-          <div className="flex items-center gap-1">
-            <Package size={12} />
-            RM Ordered:
-            <span
-              className={`ml-1 font-medium ${
-                allRMOrdered ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {allRMOrdered ? "Yes" : "Pending"}
-            </span>
-          </div>
-
           <button
             type="button"
-            disabled={allRMOrdered}
+            disabled={!canOrderRM}
             className="w-full px-2 py-1 text-xs rounded bg-orange-500 text-white
               disabled:opacity-40 hover:bg-orange-600"
-            onClick={(e) => {
+            onClick={e => {
               e.stopPropagation();
-              fire(onStageAction?.markRMOrdered);
+              fire(onStageAction.markRMOrdered);
             }}
           >
+            <Package size={12} className="inline mr-1" />
             Mark RM Ordered
           </button>
         </div>
@@ -139,28 +141,17 @@ export default function SOCard({
       {/* ================= RM INVENTORY ================= */}
       {stage === "RMInventory" && (
         <div className="mt-3 space-y-2 text-xs">
-          <div className="flex items-center gap-1">
-            <Package size={12} />
-            RM Received:
-            <span
-              className={`ml-1 font-medium ${
-                allRMReceived ? "text-green-600" : "text-yellow-600"
-              }`}
-            >
-              {allRMReceived ? "Complete" : "Pending"}
-            </span>
-          </div>
-
           <button
             type="button"
-            disabled={allRMReceived}
+            disabled={!canReceiveRM}
             className="w-full px-2 py-1 text-xs rounded bg-blue-500 text-white
               disabled:opacity-40 hover:bg-blue-600"
-            onClick={(e) => {
+            onClick={e => {
               e.stopPropagation();
-              fire(onStageAction?.markRMReceived);
+              fire(onStageAction.markRMReceived);
             }}
           >
+            <Package size={12} className="inline mr-1" />
             Mark RM Received
           </button>
         </div>
@@ -169,28 +160,17 @@ export default function SOCard({
       {/* ================= QUALITY ================= */}
       {stage === "Quality" && (
         <div className="mt-3 space-y-2 text-xs">
-          <div className="flex items-center gap-1">
-            <CheckCircle size={12} />
-            QA Status:
-            <span
-              className={`ml-1 font-medium ${
-                allQAApproved ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {allQAApproved ? "Approved" : "Pending"}
-            </span>
-          </div>
-
           <button
             type="button"
-            disabled={allQAApproved}
+            disabled={!canApproveQA}
             className="w-full px-2 py-1 text-xs rounded bg-green-600 text-white
               disabled:opacity-40 hover:bg-green-700"
-            onClick={(e) => {
+            onClick={e => {
               e.stopPropagation();
-              fire(onStageAction?.approveQA);
+              fire(onStageAction.approveQA);
             }}
           >
+            <CheckCircle size={12} className="inline mr-1" />
             Approve QA
           </button>
         </div>
@@ -199,28 +179,19 @@ export default function SOCard({
       {/* ================= FG INVENTORY ================= */}
       {stage === "FGInventory" && (
         <div className="mt-3 space-y-2 text-xs">
-          <div className="flex items-center gap-1">
-            <Package size={12} />
-            FG Ready:
-            <span
-              className={`ml-1 font-medium ${
-                allFGReady ? "text-green-600" : "text-yellow-600"
-              }`}
-            >
-              {allFGReady ? "Yes" : "Pending"}
-            </span>
-          </div>
-
           <button
-  type="button"
-  onClick={(e) => {
-    e.stopPropagation();       // 🔑 REQUIRED
-    onStageAction.markRMOrdered(item.ID);
-  }}
->
-  Mark RM Ordered
-</button>
-
+            type="button"
+            disabled={!canInvoice}
+            className="w-full px-2 py-1 text-xs rounded bg-purple-600 text-white
+              disabled:opacity-40 hover:bg-purple-700"
+            onClick={e => {
+              e.stopPropagation();
+              fire(onStageAction.createInvoice);
+            }}
+          >
+            <FileText size={12} className="inline mr-1" />
+            Create Invoice
+          </button>
         </div>
       )}
 

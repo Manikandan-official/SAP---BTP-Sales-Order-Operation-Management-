@@ -4,11 +4,11 @@ import Topbar from "./components/Topbar";
 import Sidebar from "./components/Sidebar";
 import Board from "./components/Board";
 import AddSOModal from "./components/AddSOModal";
+import useOrders from "./hooks/useOrders";
 
 /* =========================================================
-   CONSTANTS
+   PIPELINE STAGES (UI CONFIG ONLY)
 ========================================================= */
-
 const STAGES = [
   { id: "SalesSupport", title: "Sales Order" },
   { id: "Procurement", title: "Purchases" },
@@ -17,145 +17,28 @@ const STAGES = [
   { id: "FGInventory", title: "FG Inventory" }
 ];
 
-const mockCustomers = [{ ID: "C1", name: "Customer 1" }];
-
-const INITIAL_ORDERS = [
-  {
-    ID: "M1",
-    orderNo: "SO5678",
-    customer_ID: "C1",
-    currentStage: "SalesSupport",
-    items: [
-      { skuName: "Screen", qty: 10 },
-      { skuName: "Battery", qty: 10 }
-    ]
-  }
-];
+const STAGE_IDS = STAGES.map(s => s.id);
 
 /* =========================================================
-   APP
+   APP (FRONTEND COMPLETE, BACKEND-AGNOSTIC)
 ========================================================= */
-
 export default function App() {
-  const [allOrders, setAllOrders] = useState(INITIAL_ORDERS);
+  const {
+    orders = [],
+    customers = [],
+    loading,
+    error,
+    moveToStage,
+    createChildSO
+  } = useOrders();
+
   const [openAdd, setOpenAdd] = useState(false);
   const [selectedMaster, setSelectedMaster] = useState(null);
 
   /* =========================================================
-     CORE HELPERS (SINGLE SOURCE OF TRUTH)
+     CHILD SOs → PIPELINE BOARD
+     (Only executable units appear here)
   ========================================================= */
-
-  const updateOrder = (orderID, updater) => {
-    setAllOrders(prev =>
-      prev.map(o => (o.ID === orderID ? updater(o) : o))
-    );
-  };
-
-  const updateAllItems = (order, updater) => ({
-    ...order,
-    items: Array.isArray(order.items)
-      ? order.items.map(updater)
-      : []
-  });
-
-  const nextStage = (stage) => {
-    switch (stage) {
-      case "SalesSupport":
-        return "Procurement";
-      case "Procurement":
-        return "RMInventory";
-      case "RMInventory":
-        return "Quality";
-      case "Quality":
-        return "FGInventory";
-      default:
-        return stage;
-    }
-  };
-
-  /* =========================================================
-     STAGE ACTIONS (PHASE 2.1 — UI AUTHORITATIVE)
-     👉 Buttons call these
-     👉 State updates immediately
-     👉 Easy swap with CAP later
-  ========================================================= */
-
-  const stageActions = {
-    markRMOrdered: (orderID) =>
-      updateOrder(orderID, order => ({
-        ...updateAllItems(order, i => ({
-          ...i,
-          materialOrdered: true
-        })),
-        currentStage: nextStage(order.currentStage)
-      })),
-
-    markRMReceived: (orderID) =>
-      updateOrder(orderID, order => ({
-        ...updateAllItems(order, i => ({
-          ...i,
-          materialReceived: true
-        })),
-        currentStage: nextStage(order.currentStage)
-      })),
-
-    approveQA: (orderID) =>
-      updateOrder(orderID, order => ({
-        ...updateAllItems(order, i => ({
-          ...i,
-          qaApproved: true
-        })),
-        currentStage: nextStage(order.currentStage)
-      })),
-
-    createInvoice: (orderID) =>
-      updateOrder(orderID, order => ({
-        ...order,
-        invoiced: true
-      }))
-  };
-
-  /* =========================================================
-     DRAG & DROP MOVE (UI ONLY)
-  ========================================================= */
-
-  const handleMove = (orderID, toStage) => {
-    updateOrder(orderID, order => ({
-      ...order,
-      currentStage: toStage
-    }));
-  };
-
-  /* =========================================================
-     ADD CHILD SO
-  ========================================================= */
-
-  const handleCreateChildSO = (payload) => {
-    const child = {
-      ID: crypto.randomUUID(),
-      parentSO_ID: payload.parentSO_ID,
-      customer_ID: payload.customer_ID,
-      orderNo: payload.orderNo,
-      currentStage: "SalesSupport",
-      expectedShipDate: payload.expectedShipDate,
-      plant: payload.plant,
-      items: payload.items.map(i => ({
-        ...i,
-        materialOrdered: false,
-        materialReceived: false,
-        qaApproved: false,
-        fgReady: false
-      }))
-    };
-
-    setAllOrders(prev => [...prev, child]);
-    setOpenAdd(false);
-  };
-
-  /* =========================================================
-     BOARD GROUPING
-  ========================================================= */
-
   const ordersByStage = useMemo(() => {
     const buckets = {
       SalesSupport: [],
@@ -165,28 +48,80 @@ export default function App() {
       FGInventory: []
     };
 
-    allOrders.forEach(o => {
-      if (!o.parentSO_ID) return; // master SOs not on board
-      buckets[o.currentStage || "SalesSupport"].push(o);
+    orders.forEach(order => {
+      // Master SOs never appear on the board
+      if (!order.parentSO_ID) return;
+
+      const stage = STAGE_IDS.includes(order.currentStage)
+        ? order.currentStage
+        : "SalesSupport";
+
+      buckets[stage].push(order);
     });
 
     return buckets;
-  }, [allOrders]);
+  }, [orders]);
 
-  const masters = allOrders.filter(o => !o.parentSO_ID);
+  /* =========================================================
+     MASTER SOs (CONTEXT / CONTAINER ONLY)
+  ========================================================= */
+  const masterOrders = useMemo(
+    () => orders.filter(o => !o.parentSO_ID),
+    [orders]
+  );
+
+  /* =========================================================
+     EVENT HANDLERS
+     (Hook owns the data, App just delegates)
+  ========================================================= */
+  const handleMove = (orderID, toStage) => {
+    moveToStage?.(orderID, toStage);
+  };
+
+  const handleCreateChildSO = payload => {
+    createChildSO?.(payload);
+    setOpenAdd(false);
+  };
+
+  /* =========================================================
+     RENDER STATES
+     (Keep lightweight – mock hooks may be synchronous)
+  ========================================================= */
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center text-gray-500">
+        Loading Sales Orders…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="h-screen flex items-center justify-center text-red-600">
+        {error}
+      </div>
+    );
+  }
 
   /* =========================================================
      RENDER
   ========================================================= */
-
   return (
     <div className="h-screen flex flex-col">
-      <Topbar onAdd={() => setOpenAdd(true)} />
+      <Topbar
+        onAdd={() => {
+          if (!selectedMaster) {
+            window.alert("Please select a Master Sales Order first");
+            return;
+          }
+          setOpenAdd(true);
+        }}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
-          customers={mockCustomers}
-          orders={allOrders}
+          customers={customers}
+          orders={orders}
           selectedCustomer={null}
           selectedMaster={selectedMaster}
           onCustomerSelect={() => {}}
@@ -195,22 +130,21 @@ export default function App() {
 
         <main className="flex-1 p-6 overflow-auto">
           <Board
-  stages={STAGES}
-  ordersByStage={ordersByStage}
-  onMove={handleMove}
-  onOpenDetail={() => {}}
-  onStageAction={stageActions}   // ✅ SINGULAR
-/>
-
+            stages={STAGES}
+            ordersByStage={ordersByStage}
+            onMove={handleMove}
+            onOpenDetail={() => {}}
+          />
         </main>
       </div>
 
       {openAdd && (
         <AddSOModal
           open
+          masters={masterOrders}
+          selectedMaster={selectedMaster}
           onClose={() => setOpenAdd(false)}
           onCreate={handleCreateChildSO}
-          masterSO={masters[0]}
         />
       )}
     </div>

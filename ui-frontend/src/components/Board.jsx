@@ -1,26 +1,23 @@
 // src/components/Board.jsx
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   DndContext,
   PointerSensor,
   useSensor,
   useSensors,
   DragOverlay,
-  closestCorners
+  rectIntersection
 } from "@dnd-kit/core";
 import Column from "./Column";
 import SOCard from "./SOCard";
 
 /**
- * Board.jsx
+ * Board.jsx (Frontend Final)
  * =========================================================
- * PHASE–1.4 FINAL (AUTHORITATIVE)
- *
- * ✔ Multi-card-per-stage drag & drop FIXED
- * ✔ Drop works on empty AND populated stages
- * ✔ Stable sorting preserved
- * ✔ Stage actions wired (UI-only)
- * ✔ Backend-ready, zero coupling
+ * ✔ Stable drag & drop across empty + filled columns
+ * ✔ Backend-agnostic, UI-authoritative
+ * ✔ Defensive against malformed drag data
+ * ✔ No business logic leakage
  * =========================================================
  */
 
@@ -30,8 +27,7 @@ export default function Board({
   sortByStage = {},
   onSortChange,
   onMove,
-  onOpenDetail,
-  onStageAction
+  onOpenDetail
 }) {
   /* ================= DND SENSORS ================= */
   const sensors = useSensors(
@@ -43,62 +39,78 @@ export default function Board({
   const [activeCard, setActiveCard] = useState(null);
 
   /* ================= SORT HELPERS ================= */
-  const stableSort = (arr, compareFn) =>
-    arr
-      .map((v, i) => ({ v, i }))
-      .sort((a, b) => compareFn(a.v, b.v) || a.i - b.i)
-      .map(x => x.v);
+  const stableSort = useCallback(
+    (arr, compareFn) =>
+      arr
+        .map((v, i) => ({ v, i }))
+        .sort((a, b) => compareFn(a.v, b.v) || a.i - b.i)
+        .map(x => x.v),
+    []
+  );
 
-  const compareBy = (field, dir) => (a, b) => {
-    const av = a?.[field] ? new Date(a[field]).getTime() : Infinity;
-    const bv = b?.[field] ? new Date(b[field]).getTime() : Infinity;
-    return dir === "asc" ? av - bv : bv - av;
-  };
+  const compareBy = useCallback(
+    (field, dir) => (a, b) => {
+      const av = a?.[field]
+        ? new Date(a[field]).getTime()
+        : Infinity;
+      const bv = b?.[field]
+        ? new Date(b[field]).getTime()
+        : Infinity;
+      return dir === "asc" ? av - bv : bv - av;
+    },
+    []
+  );
 
   /* ================= DRAG START ================= */
-  const handleDragStart = (event) => {
-    setActiveCard(event.active?.data?.current || null);
-  };
-
-  /* ================= DRAG END (CRITICAL FIX) ================= */
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-    setActiveCard(null);
-
-    if (!active || !over) return;
-
-    const activeData = active.data?.current;
-    const overData = over.data?.current;
-
-    // Guardrails
-    if (!activeData || activeData.type !== "CARD") return;
-
-    const orderID = activeData.orderId;
-    const fromStage = activeData.fromStage;
-
-    let toStage = null;
-
-    // ✅ Drop on empty column
-    if (overData?.type === "STAGE") {
-      toStage = overData.stage;
+  const handleDragStart = useCallback(event => {
+    const data = event?.active?.data?.current;
+    if (data && data.type === "CARD") {
+      setActiveCard(data);
     }
+  }, []);
 
-    // ✅ Drop on card inside column (THIS WAS MISSING)
-    if (overData?.type === "CARD") {
-      toStage = overData.fromStage;
-    }
+  /* ================= DRAG END ================= */
+  const handleDragEnd = useCallback(
+    event => {
+      const { active, over } = event;
+      setActiveCard(null);
 
-    if (!orderID || !toStage) return;
-    if (fromStage === toStage) return;
+      if (!active || !over) return;
 
-    onMove?.(orderID, toStage);
-  };
+      const activeData = active.data?.current;
+      const overData = over.data?.current;
+
+      if (!activeData || activeData.type !== "CARD") return;
+
+      const orderID = activeData.orderId;
+      const fromStage = activeData.fromStage;
+
+      let toStage = null;
+
+      // Dropped on empty column
+      if (overData?.type === "STAGE") {
+        toStage = overData.stage;
+      }
+
+      // Dropped on another card
+      if (overData?.type === "CARD") {
+        toStage = overData.fromStage;
+      }
+
+      if (!orderID || !fromStage || !toStage) return;
+      if (fromStage === toStage) return;
+
+      // 🔑 Single delegation point
+      onMove?.(orderID, toStage);
+    },
+    [onMove]
+  );
 
   /* ================= RENDER ================= */
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={rectIntersection}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
@@ -111,9 +123,15 @@ export default function Board({
               dir: "asc"
             };
 
-          const sortedItems = stableSort(
-            ordersByStage[stage.id] || [],
-            compareBy(sortConfig.field, sortConfig.dir)
+          const items = ordersByStage[stage.id] || [];
+
+          const sortedItems = useMemo(
+            () =>
+              stableSort(
+                items,
+                compareBy(sortConfig.field, sortConfig.dir)
+              ),
+            [items, sortConfig, stableSort, compareBy]
           );
 
           return (
@@ -124,7 +142,6 @@ export default function Board({
               sortConfig={sortConfig}
               onSortChange={onSortChange}
               onOpenDetail={onOpenDetail}
-              onStageAction={onStageAction}
             />
           );
         })}
@@ -132,7 +149,9 @@ export default function Board({
 
       {/* DRAG OVERLAY */}
       <DragOverlay>
-        {activeCard ? <SOCard item={activeCard} dragging /> : null}
+        {activeCard ? (
+          <SOCard item={activeCard} dragging />
+        ) : null}
       </DragOverlay>
     </DndContext>
   );

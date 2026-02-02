@@ -49,10 +49,10 @@ service SalesService @(path:'/odata/v4/sales') {
     newPriority : Integer
   ) returns SalesOrders;
 
-  action moveToStage(
-    orderID : UUID,
-    stage   : String
-  ) returns String;
+  action requestStageTransition(
+  orderID : UUID
+) returns String;
+
 
   action markMaterialOrdered(
     itemID        : UUID,

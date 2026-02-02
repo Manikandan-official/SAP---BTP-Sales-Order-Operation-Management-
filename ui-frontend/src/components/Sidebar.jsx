@@ -1,56 +1,28 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/components/Sidebar.jsx
+import React, { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "react-feather";
 
 /**
- * Sidebar.jsx (PHASE-1.2 FINAL)
+ * Sidebar.jsx (Frontend Final)
  * =========================================================
  * ✔ Customer → Master → Child hierarchy
- * ✔ Auto-expand on Add SO
- * ✔ Highlight newly created Child SO
- * ✔ Safe against empty / partial data
- * ✔ No JSX syntax traps
- * ✔ Zero backend dependency
+ * ✔ Decoupled expand vs select behavior
+ * ✔ Master selection is explicit and stable
+ * ✔ Backend-agnostic
  * =========================================================
  */
 
 export default function Sidebar({
   customers = [],
   orders = [],
-  selectedCustomer = null,
   selectedMaster = null,
-  lastCreatedChild = null,   // 🔑 NEW (SAFE DEFAULT)
-  onCustomerSelect = () => {},
-  onMasterSelect = () => {},
-  onChildSelect = () => {}
+  onMasterSelect = () => {}
 }) {
   const [openCustomers, setOpenCustomers] = useState({});
   const [openMasters, setOpenMasters] = useState({});
 
-  /* =========================================================
-     NORMALIZE INPUT
-  ========================================================= */
   const safeCustomers = Array.isArray(customers) ? customers : [];
   const safeOrders = Array.isArray(orders) ? orders : [];
-
-  /* =========================================================
-     AUTO-EXPAND ON ADD SO
-  ========================================================= */
-  useEffect(() => {
-    if (!lastCreatedChild) return;
-
-    setOpenCustomers(prev => ({
-      ...prev,
-      [lastCreatedChild.customer_ID]: true
-    }));
-
-    setOpenMasters(prev => ({
-      ...prev,
-      [lastCreatedChild.parentSO_ID]: true
-    }));
-
-    onCustomerSelect(lastCreatedChild.customer_ID);
-    onMasterSelect(lastCreatedChild.parentSO_ID);
-  }, [lastCreatedChild, onCustomerSelect, onMasterSelect]);
 
   /* =========================================================
      GROUP ORDERS BY CUSTOMER
@@ -59,7 +31,7 @@ export default function Sidebar({
     const map = {};
 
     safeCustomers.forEach(c => {
-      if (c?.ID) map[c.ID] = [];
+      if (c?.id) map[c.id] = [];
     });
 
     safeOrders.forEach(o => {
@@ -84,7 +56,7 @@ export default function Sidebar({
       )}
 
       {safeCustomers.map(customer => {
-        const customerId = customer.ID;
+        const customerId = customer.id;
         const customerName = customer.name || "Unknown Customer";
         const isCustomerOpen = !!openCustomers[customerId];
 
@@ -93,27 +65,25 @@ export default function Sidebar({
 
         return (
           <div key={customerId} className="mb-3">
-            {/* CUSTOMER */}
+            {/* CUSTOMER ROW (EXPAND ONLY) */}
             <div
-              className={`flex items-center justify-between px-2 py-2 rounded cursor-pointer
-                ${
-                  selectedCustomer === customerId
-                    ? "bg-orange-100 text-orange-700"
-                    : "hover:bg-gray-100"
-                }`}
-              onClick={() => {
-                onCustomerSelect(customerId);
+              className="flex items-center justify-between px-2 py-2 rounded cursor-pointer hover:bg-gray-100"
+              onClick={() =>
                 setOpenCustomers(prev => ({
                   ...prev,
                   [customerId]: !isCustomerOpen
-                }));
-              }}
+                }))
+              }
             >
               <span className="text-sm font-medium">{customerName}</span>
-              {isCustomerOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              {isCustomerOpen ? (
+                <ChevronDown size={14} />
+              ) : (
+                <ChevronRight size={14} />
+              )}
             </div>
 
-            {/* MASTER SO */}
+            {/* MASTER SALES ORDERS */}
             {isCustomerOpen && masterOrders.length > 0 && (
               <div className="ml-4 mt-1 space-y-1">
                 {masterOrders.map(master => {
@@ -126,6 +96,7 @@ export default function Sidebar({
 
                   return (
                     <div key={masterId}>
+                      {/* MASTER ROW (SELECT + EXPAND) */}
                       <div
                         className={`flex items-center justify-between px-2 py-1 rounded cursor-pointer
                           ${
@@ -144,31 +115,24 @@ export default function Sidebar({
                         <span className="text-sm font-medium">
                           {master.orderNo}
                         </span>
-                        {isMasterOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        {isMasterOpen ? (
+                          <ChevronDown size={12} />
+                        ) : (
+                          <ChevronRight size={12} />
+                        )}
                       </div>
 
-                      {/* CHILD SO */}
+                      {/* CHILD SALES ORDERS (DISPLAY ONLY) */}
                       {isMasterOpen && childOrders.length > 0 && (
                         <div className="ml-4 mt-1 space-y-1">
-                          {childOrders.map(child => {
-                            const isNew =
-                              lastCreatedChild?.ID === child.ID;
-
-                            return (
-                              <div
-                                key={child.ID}
-                                className={`px-2 py-1 text-xs rounded cursor-pointer
-                                  ${
-                                    isNew
-                                      ? "bg-green-100 text-green-800 font-medium"
-                                      : "text-gray-600 hover:bg-gray-50"
-                                  }`}
-                                onClick={() => onChildSelect(child.ID)}
-                              >
-                                {child.orderNo}
-                              </div>
-                            );
-                          })}
+                          {childOrders.map(child => (
+                            <div
+                              key={child.ID}
+                              className="px-2 py-1 text-xs text-gray-600"
+                            >
+                              {child.orderNo}
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>

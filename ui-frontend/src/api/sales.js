@@ -2,9 +2,30 @@
 import { apiGet, apiPost } from "./client";
 
 /* =========================================================
-   STAGE ACTIONS (CAP ACTIONS)
-   UI calls these → backend enforces rules
+   READ APIs (OData v4)
 ========================================================= */
+
+export const fetchOrders = async () => {
+  const res = await apiGet(
+    "/odata/v4/sales/SalesOrders?$expand=items"
+  );
+  return res?.value ?? [];
+};
+
+export const fetchCustomers = async () => {
+  const res = await apiGet(
+    "/odata/v4/sales/Customers"
+  );
+  return res?.value ?? [];
+};
+
+/* =========================================================
+   ORDER-LEVEL STAGE ACTIONS (AUTHORITATIVE)
+   UI → CAP → DB
+========================================================= */
+
+export const moveToStage = (orderID, stage) =>
+  apiPost("/odata/v4/sales/moveToStage", { orderID, stage });
 
 export const markRMOrdered = (orderID) =>
   apiPost("/odata/v4/sales/markRMOrdered", { orderID });
@@ -15,29 +36,11 @@ export const markRMReceived = (orderID) =>
 export const approveQA = (orderID) =>
   apiPost("/odata/v4/sales/approveQA", { orderID });
 
+export const markFGReady = (orderID) =>
+  apiPost("/odata/v4/sales/markFGReady", { orderID });
+
 export const createInvoice = (orderID) =>
   apiPost("/odata/v4/sales/createInvoice", { orderID });
-
-export const moveToStage = (orderID, stage) =>
-  apiPost("/odata/v4/sales/moveToStage", { orderID, stage });
-
-/* =========================================================
-   READ APIs (OData v4)
-========================================================= */
-
-export async function fetchOrders() {
-  const res = await apiGet(
-    "/odata/v4/sales/SalesOrders?$expand=items"
-  );
-  return res?.value ?? [];
-}
-
-export async function fetchCustomers() {
-  const res = await apiGet(
-    "/odata/v4/sales/Customers"
-  );
-  return res?.value ?? [];
-}
 
 /* =========================================================
    CREATE APIs

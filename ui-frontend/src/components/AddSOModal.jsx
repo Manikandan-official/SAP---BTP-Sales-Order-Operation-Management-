@@ -1,70 +1,80 @@
+// src/components/AddSOModal.jsx
 import React, { useMemo, useState } from "react";
+
+/**
+ * AddSOModal (Frontend-Complete)
+ * =========================================================
+ * ✔ Creates Child SO from selected Master
+ * ✔ Enforces Master → Child relationship
+ * ✔ Backend-agnostic
+ * ✔ SKU logic deferred to next phase
+ * =========================================================
+ */
 
 export default function AddSOModal({
   open,
   onClose,
   onCreate,
-  masterSO
+  masters = [],
+  selectedMaster
 }) {
   const [step, setStep] = useState(1);
-  const [selectedSKUs, setSelectedSKUs] = useState([]);
   const [shipDate, setShipDate] = useState("");
   const [plant, setPlant] = useState("");
 
-  if (!open || !masterSO) return null;
+  if (!open) return null;
 
-  const nextChildIndex = (masterSO.children?.length || 0) + 1;
-  const childSOName = `${masterSO.orderNo}/${nextChildIndex}`;
-
-  const availableSKUs = useMemo(
-    () => masterSO.items || [],
-    [masterSO]
+  const masterSO = useMemo(
+    () => masters.find(m => m.ID === selectedMaster),
+    [masters, selectedMaster]
   );
 
-  const toggleSKU = (sku) => {
-    setSelectedSKUs(prev =>
-      prev.includes(sku)
-        ? prev.filter(s => s !== sku)
-        : [...prev, sku]
-    );
-  };
+  if (!masterSO) return null;
 
+  /* =====================================================
+     CHILD SO NUMBER (FRONTEND LOGIC)
+  ===================================================== */
+  const existingChildrenCount = masters.filter(
+    o => o.parentSO_ID === masterSO.ID
+  ).length;
+
+  const childOrderNo = `${masterSO.orderNo}/${existingChildrenCount + 1}`;
+
+  /* =====================================================
+     VALIDATION
+  ===================================================== */
   const canProceed =
-    (step === 1 && selectedSKUs.length > 0) ||
+    (step === 1 && true) ||
     (step === 2 && shipDate) ||
     (step === 3 && plant);
 
+  /* =====================================================
+     SAVE HANDLER
+  ===================================================== */
   const handleSave = () => {
     onCreate({
       parentSO_ID: masterSO.ID,
+      orderNo: childOrderNo,
       customer_ID: masterSO.customer_ID,
-      orderNo: childSOName,
       expectedShipDate: shipDate,
-      plant,
-      items: selectedSKUs.map(sku => ({
-        ...sku,
-        materialOrdered: false,
-        materialReceived: false,
-        qaApproved: false,
-        fgReady: false
-      }))
+      plant
     });
     onClose();
   };
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="bg-white w-[640px] rounded shadow-lg p-6">
+      <div className="bg-white w-[560px] rounded-xl shadow-lg p-6">
         <h2 className="text-lg font-semibold text-orange-600 mb-4">
-          Create Child SO
+          Create Child Sales Order
         </h2>
 
         {/* STEP INDICATOR */}
-        <div className="flex gap-4 mb-6 text-sm">
+        <div className="flex gap-3 mb-6 text-sm">
           {[1, 2, 3].map(s => (
             <span
               key={s}
-              className={`px-3 py-1 rounded ${
+              className={`px-3 py-1 rounded-full ${
                 step === s
                   ? "bg-orange-500 text-white"
                   : "bg-gray-200 text-gray-600"
@@ -75,76 +85,73 @@ export default function AddSOModal({
           ))}
         </div>
 
-        {/* STEP 1 */}
+        {/* STEP 1 – REVIEW */}
         {step === 1 && (
-          <>
-            <div className="mb-4">
-              <label className="text-xs text-gray-500">SO Name</label>
-              <input value={childSOName} disabled className="w-full border-b py-1" />
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs text-gray-500">Master SO</label>
+              <input
+                value={masterSO.orderNo}
+                disabled
+                className="w-full border-b py-1 bg-transparent"
+              />
             </div>
 
-            <table className="w-full text-sm">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th />
-                  <th>SKU</th>
-                  <th>Unit Rate</th>
-                  <th>Qty</th>
-                </tr>
-              </thead>
-              <tbody>
-                {availableSKUs.map((sku, idx) => (
-                  <tr key={idx} className="border-b">
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedSKUs.includes(sku)}
-                        onChange={() => toggleSKU(sku)}
-                      />
-                    </td>
-                    <td>{sku.skuName}</td>
-                    <td>₹ {sku.unitRate}</td>
-                    <td>{sku.qty}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
+            <div>
+              <label className="text-xs text-gray-500">Child SO Number</label>
+              <input
+                value={childOrderNo}
+                disabled
+                className="w-full border-b py-1 bg-transparent"
+              />
+            </div>
+
+            <p className="text-sm text-gray-500">
+              This child SO will inherit customer details from the master order.
+            </p>
+          </div>
         )}
 
-        {/* STEP 2 */}
+        {/* STEP 2 – SHIP DATE */}
         {step === 2 && (
           <div>
-            <label className="text-sm">Expected Ship Date</label>
+            <label className="text-sm font-medium">
+              Expected Ship Date
+            </label>
             <input
               type="date"
-              className="w-full border-b mt-2"
+              className="w-full border-b mt-2 py-1"
               value={shipDate}
               onChange={e => setShipDate(e.target.value)}
             />
           </div>
         )}
 
-        {/* STEP 3 */}
+        {/* STEP 3 – PLANT */}
         {step === 3 && (
           <div>
-            <label className="text-sm">Allocate to Plant</label>
+            <label className="text-sm font-medium">
+              Allocate to Plant
+            </label>
             <select
-              className="w-full border-b mt-2"
+              className="w-full border-b mt-2 py-1"
               value={plant}
               onChange={e => setPlant(e.target.value)}
             >
               <option value="">Select Plant</option>
-              <option>Delhi</option>
-              <option>Chennai</option>
-              <option>Pune</option>
+              <option value="Delhi">Delhi</option>
+              <option value="Chennai">Chennai</option>
+              <option value="Pune">Pune</option>
             </select>
           </div>
         )}
 
         {/* ACTIONS */}
-        <div className="flex justify-end gap-3 mt-6">
-          <button onClick={onClose} className="px-4 py-2 bg-gray-200">
+        <div className="flex justify-end gap-3 mt-8">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded bg-gray-200"
+          >
             Cancel
           </button>
 
@@ -152,14 +159,14 @@ export default function AddSOModal({
             <button
               disabled={!canProceed}
               onClick={() => setStep(step + 1)}
-              className="px-4 py-2 bg-orange-500 text-white disabled:opacity-40"
+              className="px-4 py-2 rounded bg-orange-500 text-white disabled:opacity-40"
             >
               Next
             </button>
           ) : (
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-orange-600 text-white"
+              className="px-4 py-2 rounded bg-orange-600 text-white"
             >
               Save
             </button>

@@ -2,16 +2,14 @@ const cds = require('@sap/cds');
 
 module.exports = cds.service.impl(async function () {
 
-  // Load projected entities exactly as in service.cds
   const {
-    SalesOrders,
-    SalesOrderItems,
-    Customers,
-    OrderStages,
-    ERPFileLogs
-  } = this.entities;
+  SalesOrders,
+  SalesOrderItems,
+  Customers,
+  OrderStages,
+  ERPFileLogs
+} = this.entities;
 
-  const STAGES = ['SalesSupport', 'Procurement', 'RMInventory', 'Quality', 'FGInventory'];
 
   // ============================================================================
 // 1. UPLOAD MASTER SO
@@ -224,54 +222,101 @@ module.exports = cds.service.impl(async function () {
 
 
 
-  // ============================================================================
-  // 6. MOVE TO STAGE (flexible for DnD)
-  // ============================================================================
-  this.on('moveToStage', async (req) => {
-    try {
-      const { orderID, stage } = req.data;
+// ============================================================================
+// 6. REQUEST STAGE TRANSITION (AUTHORITATIVE WORKFLOW)
+// ============================================================================
+this.on('requestStageTransition', async (req) => {
+  try {
+    const { orderID } = req.data;
+    if (!orderID) return req.error(400, "orderID is required");
 
-      if (!orderID) return req.error(400, "orderID is required");
-      if (!stage || !STAGES.includes(stage)) return req.error(400, "Invalid target stage");
+    const so = await SELECT.one.from(SalesOrders).where({ ID: orderID });
+    if (!so) return req.error(404, "Sales Order not found");
 
-      const so = await SELECT.one.from(SalesOrders).where({ ID: orderID });
-      if (!so) return req.error(404, "Order not found");
+    const items = await SELECT.from(SalesOrderItems).where({
+      parentSO_ID: orderID
+    });
 
-      const items = await SELECT.from(SalesOrderItems).where({ parentSO_ID: orderID });
+    const currentStage = so.currentStage || "SalesSupport";
+    const nextStage = WORKFLOW[currentStage];
 
-      // prerequisite checks (keep strict business rules)
-      if (stage === 'RMInventory' && items.some(i => !i.materialOrdered))
-        return req.error(400, "SKUs not ordered");
-
-      if (stage === 'Quality' && items.some(i => !i.materialReceived))
-        return req.error(400, "SKUs not received");
-
-      if (stage === 'FGInventory' && items.some(i => !i.qaApproved))
-        return req.error(400, "QA incomplete");
-
-      // perform update (allow move to any stage, not only sequential)
-      await UPDATE(SalesOrders)
-        .set({ currentStage: stage, lastActivity: new Date() })
-        .where({ ID: orderID });
-
-      // log stage entry
-      await INSERT.into(OrderStages).entries({
-        order_ID: orderID,
-        stageName: stage,
-        enteredAt: new Date()
-      });
-
-      // return the refreshed order record for frontend sync
-      const updated = await SELECT.one.from(SalesOrders).where({ ID: orderID });
-      return { message: `Moved to ${stage}`, order: updated };
-
-    } catch (e) {
-      console.error("moveToStage error:", e);
-      return req.error(500, "Internal error");
+    if (!nextStage) {
+      return req.error(
+        400,
+        `Sales Order already in final stage (${currentStage})`
+      );
     }
-  });
+    
+    if (!so.parentSO_ID) {
+  return req.error(
+    400,
+    "Master Sales Orders cannot move through workflow stages"
+  );
+}
 
+    // ===================== VALIDATIONS =====================
 
+    if (currentStage === "SalesSupport") {
+      if (!so.plant || !so.expectedShipDate) {
+        return req.error(
+          400,
+          "Plant and Expected Ship Date must be assigned before moving to Procurement"
+        );
+      }
+    }
+
+    if (currentStage === "Procurement") {
+      if (items.some(i => !i.materialOrdered)) {
+        return req.error(
+          400,
+          "All raw materials must be ordered before moving to RM Inventory"
+        );
+      }
+    }
+
+    if (currentStage === "RMInventory") {
+      if (items.some(i => !i.materialReceived)) {
+        return req.error(
+          400,
+          "All raw materials must be received before moving to Quality"
+        );
+      }
+    }
+
+    if (currentStage === "Quality") {
+      if (items.some(i => !i.qaApproved)) {
+        return req.error(
+          400,
+          "QA approval required before moving to FG Inventory"
+        );
+      }
+    }
+
+    // ===================== UPDATE =====================
+
+    await UPDATE(SalesOrders)
+      .set({
+        currentStage: nextStage,
+        lastActivity: new Date()
+      })
+      .where({ ID: orderID });
+
+    await INSERT.into(OrderStages).entries({
+      order_ID: orderID,
+      stageName: nextStage,
+      enteredAt: new Date()
+    });
+
+    return {
+      message: `Moved from ${currentStage} → ${nextStage}`,
+      currentStage: nextStage
+    };
+
+  } catch (e) {
+    console.error("requestStageTransition error:", e);
+    return req.error(500, "Internal error");
+  }
+});
 
   // ============================================================================
   // 7. MARK MATERIAL ORDERED
